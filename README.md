@@ -291,4 +291,4 @@ Output: `release/SmartBill Pro Setup 1.0.0.exe`
    - Before applying any restore file, SmartBill Pro automatically creates a pre-restore fallback snapshot (`smartbill_pre_restore_backup_*.db`).
 3. **Integrity Validation**:
    - Restored databases are automatically validated using `PRAGMA integrity_check` before the transaction is finalized.
-# bill-Soft - Naveen M
+# billing-Soft - Naveen  and Team 
