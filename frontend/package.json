@@ -1,0 +1,74 @@
+{
+  "name": "shop-billing-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "cap:sync": "cap sync",
+    "cap:build:android": "tsc -b && vite build && cap sync android && cd android && ./gradlew assembleDebug",
+    "electron:start": "electron electron/main.cjs",
+    "build:electron:linux": "tsc -b && vite build && electron-builder --linux",
+    "build:electron:win": "tsc -b && vite build && electron-builder --win"
+  },
+  "description": "Offline-First Shop Billing and Inventory Management System",
+  "author": {
+    "name": "Shop Billing System",
+    "email": "admin@shopbilling.local"
+  },
+  "homepage": "https://shopbilling.local",
+  "build": {
+    "appId": "com.shopbilling.desktop",
+    "productName": "Shop Billing and Inventory",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "icon": "public/pwa-512x512.png"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/pwa-512x512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.3",
+    "axios": "^1.7.7",
+    "dexie": "^4.4.7",
+    "lucide-react": "^0.453.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vite-plugin-pwa": "^2.0.0"
+  }
+}

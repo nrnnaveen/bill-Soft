@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity="0.3" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#grad)" />
+  <g filter="url(#shadow)" fill="#ffffff">
+    <!-- Store Front / Receipt Silhouette -->
+    <path d="M128 160h256v224a16 16 0 0 1-16 16H144a16 16 0 0 1-16-16V160z" opacity="0.95" />
+    <path d="M112 144h288a16 16 0 0 0 16-16V120a16 16 0 0 0-16-16H112a16 16 0 0 0-16 16v8a16 16 0 0 0 16 16z" fill="#f8fafc" />
+    <!-- Receipt Lines -->
+    <rect x="160" y="200" width="192" height="16" rx="8" fill="#4f46e5" />
+    <rect x="160" y="240" width="144" height="14" rx="7" fill="#64748b" />
+    <rect x="160" y="274" width="160" height="14" rx="7" fill="#64748b" />
+    <!-- Rupee / Check mark badge -->
+    <circle cx="340" cy="330" r="44" fill="#10b981" />
+    <path d="M326 330l10 10 20-20" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  </g>
+</svg>

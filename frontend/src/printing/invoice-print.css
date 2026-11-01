@@ -1,0 +1,91 @@
+/* A4 Print Stylesheet for Shop Billing System */
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide everything marked no-print, print:hidden, and app shell chrome */
+  .no-print,
+  .print-controls,
+  aside,
+  nav,
+  header {
+    display: none !important;
+  }
+
+  /* Ensure invoice container occupies standard A4 printable area cleanly */
+  #invoice-print-area {
+    display: block !important;
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 194mm !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: 1.5px solid #000000 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Ensure stamp/seal image renders cleanly without black boxes from blend modes */
+  #invoice-print-area img {
+    mix-blend-mode: normal !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  table {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+/* Screen Preview Styling */
+.invoice-container {
+  width: 100%;
+  max-width: 200mm;
+  min-height: 275mm;
+  margin: 0 auto;
+  background: #ffffff;
+  color: #111827;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  border: 1.5px solid #000000;
+  box-sizing: border-box;
+}
+
+.invoice-table th, 
+.invoice-table td {
+  border-right: 1px solid #000000;
+  border-bottom: 1px solid #000000;
+}
+
+.invoice-table th:last-child,
+.invoice-table td:last-child {
+  border-right: none;
+}
