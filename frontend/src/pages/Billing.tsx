@@ -1,5 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { api, Product, InvoiceItemCreate, Invoice, ShopSettings, INDIAN_STATES } from '../services/api';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { 
+  api, 
+  Product, 
+  InvoiceItemCreate, 
+  Invoice, 
+  ShopSettings, 
+  INDIAN_STATES,
+  isValidGstin,
+  getStateFromGstin
+} from '../services/api';
 import { offlineStorage } from '../offline/storage';
 import { 
   Search, 
@@ -15,12 +24,24 @@ import {
   Plus,
   Minus,
   Printer,
-  WifiOff
+  WifiOff,
+  X,
+  History,
+  Check
 } from 'lucide-react';
 
 interface BillingProps {
   settings: ShopSettings;
   onInvoiceCreated: (invoice: Invoice) => void;
+}
+
+interface CustomerRecord {
+  name: string;
+  phone: string;
+  address: string;
+  gstin: string;
+  state: string;
+  state_code: string;
 }
 
 export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) => {
@@ -40,14 +61,19 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
   const [customerStateCode, setCustomerStateCode] = useState(settings?.state_code || '33');
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [transportCharges, setTransportCharges] = useState<number>(0);
+  const [autoRoundOff, setAutoRoundOff] = useState(false);
   const [notesTerms, setNotesTerms] = useState(settings?.default_terms || '');
+
+  // Past customer autocompletion
+  const [pastCustomers, setPastCustomers] = useState<CustomerRecord[]>([]);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
-  // Load products (instant local hydration + background server revalidation)
-  const loadProducts = async () => {
+  // Load products & previous customers for instant auto-completion
+  const loadProductsAndCustomers = async () => {
     const local = await offlineStorage.getProducts();
     if (local && local.length > 0) {
       setProducts(local);
@@ -59,10 +85,34 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
     } catch (err) {
       console.warn('Network error loading products, using offline store', err);
     }
+
+    // Load recent unique customers from past invoices
+    try {
+      const invoices = await offlineStorage.getInvoices();
+      const uniqueMap = new Map<string, CustomerRecord>();
+      (invoices || []).forEach(inv => {
+        const phone = (inv.customer_phone || '').trim();
+        const name = (inv.customer_name || '').trim();
+        const key = phone || name;
+        if (key && !uniqueMap.has(key)) {
+          uniqueMap.set(key, {
+            name: inv.customer_name || '',
+            phone: inv.customer_phone || '',
+            address: inv.customer_address || '',
+            gstin: inv.customer_gstin || '',
+            state: inv.state || 'Tamilnadu',
+            state_code: inv.state_code || '33',
+          });
+        }
+      });
+      setPastCustomers(Array.from(uniqueMap.values()));
+    } catch (e) {
+      console.warn('Could not load past customers for auto-fill', e);
+    }
   };
 
   useEffect(() => {
-    loadProducts();
+    loadProductsAndCustomers();
   }, []);
 
   // Update default state when settings change
@@ -91,11 +141,10 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
 
   // Auto-detect State and State Code from GSTIN (First 2 digits represent State Code)
   const handleGstinChange = (val: string) => {
-    const clean = val.toUpperCase().trim();
+    const clean = val.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15);
     setCustomerGstin(clean);
     if (clean.length >= 2) {
-      const codePrefix = clean.substring(0, 2);
-      const matched = INDIAN_STATES.find(s => s.code === codePrefix);
+      const matched = getStateFromGstin(clean);
       if (matched) {
         setCustomerState(matched.name);
         setCustomerStateCode(matched.code);
@@ -111,6 +160,31 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
     }
   };
 
+  // Filtered customer suggestions based on phone or name input
+  const customerSuggestions = useMemo(() => {
+    const p = customerPhone.trim().toLowerCase();
+    const n = customerName.trim().toLowerCase();
+    if (!p && !n) return [];
+    return pastCustomers.filter(c => {
+      const matchP = p && c.phone && c.phone.toLowerCase().includes(p);
+      const matchN = n && c.name && c.name.toLowerCase().includes(n);
+      return matchP || matchN;
+    }).slice(0, 5);
+  }, [customerPhone, customerName, pastCustomers]);
+
+  const handleSelectPastCustomer = (cust: CustomerRecord) => {
+    if (cust.name) setCustomerName(cust.name);
+    if (cust.phone) setCustomerPhone(cust.phone);
+    if (cust.address) setCustomerAddress(cust.address);
+    if (cust.gstin) {
+      setCustomerGstin(cust.gstin);
+      handleGstinChange(cust.gstin);
+    }
+    if (cust.state) setCustomerState(cust.state);
+    if (cust.state_code) setCustomerStateCode(cust.state_code);
+    setShowCustomerSuggestions(false);
+  };
+
   // Determine if supply is Interstate (IGST) or Intrastate (CGST + SGST)
   const isInterstate = useMemo(() => {
     const shopCode = (settings?.state_code || '33').trim();
@@ -122,6 +196,39 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
     if (custState && shopState && custState !== shopState) return true;
     return false;
   }, [customerState, customerStateCode, settings]);
+
+  // Real-time GSTIN validation and status message
+  const gstinStatus = useMemo(() => {
+    if (!customerGstin) return null;
+    const len = customerGstin.length;
+    const stateMatch = getStateFromGstin(customerGstin);
+    if (len < 15) {
+      return {
+        type: 'info' as const,
+        message: `State: ${stateMatch ? `${stateMatch.name} (${stateMatch.code})` : 'Detecting...'} • ${15 - len} characters remaining`,
+      };
+    }
+    const valid = isValidGstin(customerGstin);
+    if (valid) {
+      return {
+        type: 'success' as const,
+        message: `✓ Valid GSTIN (PAN: ${customerGstin.substring(2, 12)}) • State: ${stateMatch?.name || customerState} (${stateMatch?.code || customerStateCode}) • ${isInterstate ? 'Interstate (IGST)' : 'Intrastate (CGST+SGST)'}`,
+      };
+    } else {
+      return {
+        type: 'warning' as const,
+        message: `⚠ Format Error: Expected 2 state digits + 10-char PAN + 1 entity digit + 'Z' + 1 checksum character`,
+      };
+    }
+  }, [customerGstin, customerState, customerStateCode, isInterstate]);
+
+  // Barcode / Search Enter keypress support
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchResults.length > 0) {
+      e.preventDefault();
+      handleAddProduct(searchResults[0]);
+    }
+  };
 
   // Add product to bill
   const handleAddProduct = (product: Product) => {
@@ -304,7 +411,9 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
     totalIgst = Math.round(totalIgst * 100) / 100;
 
     const totalGst = Math.round((totalCgst + totalSgst + totalIgst) * 100) / 100;
-    const grandTotal = Math.round((goodsSubtotal + totalGst + transport) * 100) / 100;
+    const rawGrandTotal = Math.round((goodsSubtotal + totalGst + transport) * 100) / 100;
+    const roundOffDifference = autoRoundOff ? Math.round((Math.round(rawGrandTotal) - rawGrandTotal) * 100) / 100 : 0;
+    const grandTotal = autoRoundOff ? Math.round(rawGrandTotal) : rawGrandTotal;
 
     const rateBreakdowns = Array.from(rateBreakdownMap.values()).sort((a, b) => a.rate - b.rate);
 
@@ -317,10 +426,12 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
       totalIgst,
       totalGst,
       transport,
+      rawGrandTotal,
+      roundOffDifference,
       grandTotal,
       rateBreakdowns,
     };
-  }, [items, isInterstate, discountAmount, transportCharges]);
+  }, [items, isInterstate, discountAmount, transportCharges, autoRoundOff]);
 
   // Finalize and Generate Bill (Online with Transparent Offline Fallback)
   const handleFinalizeBill = async () => {
@@ -392,8 +503,8 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
       setDiscountAmount(0);
       setTransportCharges(0);
 
-      // Refresh product list
-      loadProducts();
+      // Refresh product list and customer database
+      loadProductsAndCustomers();
 
       // Trigger print preview
       onInvoiceCreated(created);
@@ -437,15 +548,27 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
         <div className="lg:col-span-8 space-y-4">
           {/* Product Search & Quick Add */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs relative">
-            <div className="relative">
-              <Search className="w-5 h-5 absolute left-3.5 top-3 text-slate-400" />
+            <div className="relative flex items-center">
+              <Search className="w-5 h-5 absolute left-3.5 text-slate-400 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search products by code or name..."
-                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search products by code, name, or scan barcode (Press Enter to add)..."
+                className="w-full pl-11 pr-10 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 text-slate-400 hover:text-slate-600 p-1"
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {/* Autocomplete Dropdown */}
@@ -616,8 +739,13 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
                                 <option value={28}>28%</option>
                               </select>
                             </td>
-                            <td className="py-2.5 px-3 text-right font-bold text-slate-900 font-mono">
-                              ₹{lineGross.toFixed(2)}
+                            <td className="py-2.5 px-3 text-right font-mono">
+                              <div className="font-bold text-slate-900">₹{lineGross.toFixed(2)}</div>
+                              {it.gst_rate > 0 && (
+                                <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+                                  ₹{(lineGross * (1 + it.gst_rate / 100)).toFixed(2)} incl.
+                                </div>
+                              )}
                             </td>
                             <td className="py-2.5 px-2 text-center">
                               <button
@@ -671,21 +799,69 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
         <div className="lg:col-span-4 space-y-4">
           {/* Customer Details Box */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
-            <h3 className="font-bold text-sm text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
-              <User className="w-4 h-4 text-indigo-600" /> Customer / Party Details
+            <h3 className="font-bold text-sm text-slate-800 flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="flex items-center gap-1.5">
+                <User className="w-4 h-4 text-indigo-600" /> Customer / Party Details
+              </span>
+              {pastCustomers.length > 0 && (
+                <span className="text-[10px] text-slate-400 font-normal">
+                  {pastCustomers.length} saved {pastCustomers.length === 1 ? 'party' : 'parties'}
+                </span>
+              )}
             </h3>
 
-            <div>
+            {/* Customer Name with Autocomplete */}
+            <div className="relative">
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                 Customer Name / M/s.
               </label>
               <input
                 type="text"
                 value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
+                onFocus={() => setShowCustomerSuggestions(true)}
+                onChange={e => {
+                  setCustomerName(e.target.value);
+                  setShowCustomerSuggestions(true);
+                }}
                 placeholder="e.g. Ramesh Traders"
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
+
+              {/* Suggestions Dropdown */}
+              {showCustomerSuggestions && customerSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto z-40 divide-y divide-slate-100">
+                  <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-50 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <History className="w-3 h-3 text-slate-400" /> Previous Parties
+                    </span>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowCustomerSuggestions(false)} 
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {customerSuggestions.map((cust, i) => (
+                    <div
+                      key={i}
+                      onClick={() => handleSelectPastCustomer(cust)}
+                      className="p-2.5 hover:bg-indigo-50/50 cursor-pointer text-xs transition-colors flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="font-bold text-slate-900">{cust.name || 'Unnamed Party'}</div>
+                        <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
+                          {cust.phone && <span>📞 {cust.phone}</span>}
+                          {cust.gstin && <span className="font-mono text-indigo-700">GST: {cust.gstin}</span>}
+                        </div>
+                      </div>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono font-medium">
+                        {cust.state_code}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
@@ -695,7 +871,11 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
               <input
                 type="text"
                 value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
+                onFocus={() => setShowCustomerSuggestions(true)}
+                onChange={e => {
+                  setCustomerPhone(e.target.value);
+                  setShowCustomerSuggestions(true);
+                }}
                 placeholder="e.g. 9876543210"
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               />
@@ -745,17 +925,51 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
               />
             </div>
 
+            {/* GSTIN Input with Live Validation Pill */}
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                Party's GSTIN (Optional)
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-semibold text-slate-600">
+                  Party's GSTIN (Optional)
+                </label>
+                {customerGstin && (
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {customerGstin.length}/15
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={customerGstin}
+                maxLength={15}
                 onChange={e => handleGstinChange(e.target.value)}
                 placeholder="e.g. 33AAAAA0000A1Z5"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono uppercase focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                className={`w-full px-3 py-2 rounded-xl border text-xs font-mono uppercase focus:outline-none focus:ring-2 ${
+                  customerGstin.length === 15
+                    ? isValidGstin(customerGstin)
+                      ? 'border-emerald-300 focus:ring-emerald-500 bg-emerald-50/20'
+                      : 'border-amber-300 focus:ring-amber-500 bg-amber-50/20'
+                    : 'border-slate-200 focus:ring-indigo-500'
+                }`}
               />
+              {/* Live GSTIN Status Pill */}
+              {gstinStatus && (
+                <div className={`mt-1.5 p-2 rounded-lg text-[11px] font-medium flex items-center gap-1.5 ${
+                  gstinStatus.type === 'success'
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                    : gstinStatus.type === 'warning'
+                    ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                    : 'bg-slate-50 border border-slate-200 text-slate-600'
+                }`}>
+                  {gstinStatus.type === 'success' ? (
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  ) : gstinStatus.type === 'warning' ? (
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                  ) : (
+                    <MapPin className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+                  )}
+                  <span>{gstinStatus.message}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -933,7 +1147,28 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
                 </div>
               )}
 
-              <div className="flex justify-between text-base font-extrabold text-slate-900 pt-3 border-t-2 border-slate-200">
+              {/* Optional Auto Round-Off Toggle */}
+              <div className="flex items-center justify-between py-1.5 px-2 bg-slate-50/80 rounded-xl border border-slate-200/80 text-[11px] text-slate-700">
+                <span className="font-medium">Round Off to Nearest Rupee</span>
+                <input
+                  type="checkbox"
+                  checked={autoRoundOff}
+                  onChange={e => setAutoRoundOff(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                  title="Toggle automatic rupee rounding"
+                />
+              </div>
+
+              {autoRoundOff && calculations.roundOffDifference !== 0 && (
+                <div className="flex justify-between text-slate-600 text-xs">
+                  <span>Round Off Adjustment:</span>
+                  <span className="font-mono">
+                    {calculations.roundOffDifference > 0 ? `+₹${calculations.roundOffDifference.toFixed(2)}` : `-₹${Math.abs(calculations.roundOffDifference).toFixed(2)}`}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-base font-extrabold text-slate-900 pt-2 border-t-2 border-slate-200">
                 <span>Total With GST (Grand Total):</span>
                 <span className="text-emerald-700 font-mono">₹{calculations.grandTotal.toFixed(2)}</span>
               </div>

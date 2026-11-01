@@ -178,8 +178,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ? 'translate-x-0 w-[260px] shadow-2xl shadow-slate-900/20 z-50'
             : '-translate-x-full lg:translate-x-0'
         } ${
-          // Desktop classes
-          isExpandedDesktop
+          // Desktop classes: pinned integrates cleanly into layout; hover overlays with drop-shadow
+          isPinned
+            ? 'lg:w-[260px] lg:shadow-none'
+            : isHovered || isFocusedWithin
             ? 'lg:w-[260px] lg:shadow-xl lg:shadow-slate-900/10'
             : 'lg:w-[72px] lg:shadow-none'
         }`}

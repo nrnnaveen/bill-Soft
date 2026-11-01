@@ -175,6 +175,12 @@ def create_invoice_transactional(
         cust_state = (invoice_in.state or settings.state or "Tamilnadu").strip().lower()
         cust_code = (invoice_in.state_code or settings.state_code or "33").strip()
 
+        # If customer GSTIN is provided, derive state code from first 2 digits if not explicitly passed
+        gstin = (invoice_in.customer_gstin or "").strip().upper()
+        if gstin and len(gstin) >= 2 and gstin[:2].isdigit():
+            if not invoice_in.state_code or invoice_in.state_code == settings.state_code:
+                cust_code = gstin[:2]
+
         # If customer state code or state name differs from shop, supply is Interstate (IGST)
         is_interstate = (
             (cust_code != "" and shop_code != "" and cust_code != shop_code)

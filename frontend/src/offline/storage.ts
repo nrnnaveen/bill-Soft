@@ -128,8 +128,16 @@ export const offlineStorage = {
     // Determine interstate vs intrastate
     const shopCode = (settings?.state_code || '33').trim();
     const shopState = (settings?.state || 'Tamilnadu').trim().toLowerCase();
-    const custCode = (payload.state_code || '').trim();
+    let custCode = (payload.state_code || '').trim();
     const custState = (payload.state || '').trim().toLowerCase();
+
+    // If customer GSTIN is provided, derive state code from first 2 digits if not explicitly set
+    const gstin = (payload.customer_gstin || '').trim().toUpperCase();
+    if (gstin && gstin.length >= 2 && /^\d{2}/.test(gstin)) {
+      if (!payload.state_code || payload.state_code === settings?.state_code) {
+        custCode = gstin.substring(0, 2);
+      }
+    }
 
     const isInterstate = Boolean(
       (custCode && shopCode && custCode !== shopCode) ||
