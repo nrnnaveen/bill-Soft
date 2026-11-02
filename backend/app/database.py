@@ -29,12 +29,14 @@ if is_production or REQUIRE_SUPABASE:
 
 if DATABASE_URL:
     try:
-        # Supabase PostgreSQL Engine
+        # Supabase PostgreSQL Engine (with PgBouncer transaction pooler support)
+        connect_args = {"prepare_threshold": None} if is_postgres else {}
         engine = create_engine(
             DATABASE_URL,
             pool_pre_ping=True,
             pool_size=10,
             max_overflow=20,
+            connect_args=connect_args,
         )
     except Exception as e:
         if is_production or REQUIRE_SUPABASE:
