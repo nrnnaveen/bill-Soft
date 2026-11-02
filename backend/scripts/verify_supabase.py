@@ -30,7 +30,7 @@ def run_audit():
         print("[FAIL] 1. SUPABASE_URL is missing in environment.")
         return False
     if not SUPABASE_KEY:
-        print("[FAIL] 1. SUPABASE_SERVICE_ROLE_KEY is missing in environment.")
+        print("[BLOCKED] 1. SUPABASE_SERVICE_ROLE_KEY is missing or undergoing rotation in backend/.env.")
         return False
 
     parsed_url = urlparse(SUPABASE_URL)

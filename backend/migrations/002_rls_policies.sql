@@ -109,3 +109,19 @@ CREATE POLICY "Authenticated users can read shop_settings" ON shop_settings
     FOR SELECT
     TO authenticated
     USING (true);
+
+-- 5. Storage Policies for private bucket 'shop-assets'
+-- Enforce that anonymous users cannot upload, modify, or delete seal assets
+DROP POLICY IF EXISTS "Service role full access on storage shop-assets" ON storage.objects;
+CREATE POLICY "Service role full access on storage shop-assets" ON storage.objects
+    FOR ALL
+    TO service_role
+    USING (bucket_id = 'shop-assets')
+    WITH CHECK (bucket_id = 'shop-assets');
+
+DROP POLICY IF EXISTS "Authenticated users can read shop-assets" ON storage.objects;
+CREATE POLICY "Authenticated users can read shop-assets" ON storage.objects
+    FOR SELECT
+    TO authenticated
+    USING (bucket_id = 'shop-assets');
+
