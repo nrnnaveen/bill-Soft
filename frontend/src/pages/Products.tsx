@@ -48,12 +48,17 @@ export const Products: React.FC = () => {
       if (showLoading) setIsLoading(true);
       setError(null);
       const data = await api.getProducts();
-      setAllProducts(data);
-      await offlineStorage.setProducts(data);
+      if (Array.isArray(data) && data.length > 0) {
+        setAllProducts(data);
+        await offlineStorage.setProducts(data);
+      } else {
+        const local = await offlineStorage.getProducts();
+        setAllProducts(Array.isArray(local) ? local : []);
+      }
     } catch (err: any) {
       console.warn('Network error loading products, using offline store', err);
       const local = await offlineStorage.getProducts();
-      setAllProducts(local);
+      setAllProducts(Array.isArray(local) ? local : []);
     } finally {
       setIsLoading(false);
     }
@@ -62,24 +67,26 @@ export const Products: React.FC = () => {
   // Initial instant hydration from local Dexie store + background server refresh
   useEffect(() => {
     offlineStorage.getProducts().then(local => {
-      if (local && local.length > 0) {
-        setAllProducts(local);
-        setProducts(local);
+      const safeLocal = Array.isArray(local) ? local : [];
+      if (safeLocal.length > 0) {
+        setAllProducts(safeLocal);
+        setProducts(safeLocal);
         setIsLoading(false);
       }
-      fetchProducts(!local || local.length === 0);
+      fetchProducts(safeLocal.length === 0);
     });
   }, []);
 
   // Instant client-side search filtering without network jitter or catalog wiping
   useEffect(() => {
+    const list = Array.isArray(allProducts) ? allProducts : [];
     const q = search.trim().toLowerCase();
     if (!q) {
-      setProducts(allProducts);
+      setProducts(list);
     } else {
       setProducts(
-        allProducts.filter(
-          p => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
+        list.filter(
+          p => (p.name || '').toLowerCase().includes(q) || (p.code || '').toLowerCase().includes(q)
         )
       );
     }

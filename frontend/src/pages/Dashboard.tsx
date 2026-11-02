@@ -30,40 +30,39 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenInvoice 
     try {
       const localProds = await offlineStorage.getProducts();
       const localInvs = await offlineStorage.getInvoices();
-      if (localProds.length > 0 || localInvs.length > 0) {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const todayInvs = localInvs.filter(i => (i.invoice_date || '').startsWith(todayStr));
-        const todaySales = todayInvs.reduce((sum, i) => sum + (i.total_amount || 0), 0);
-        const lowStock = localProds.filter(p => p.stock_quantity <= 5);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayInvs = (localInvs || []).filter(i => (i.invoice_date || '').startsWith(todayStr));
+      const todaySales = todayInvs.reduce((sum, i) => sum + (i.total_amount || 0), 0);
+      const lowStock = (localProds || []).filter(p => p.stock_quantity <= 5);
 
-        setStats({
-          total_products: localProds.length,
-          total_stock_units: localProds.reduce((sum, p) => sum + p.stock_quantity, 0),
-          today_sales: Math.round(todaySales * 100) / 100,
-          today_bills_count: todayInvs.length,
-          low_stock_products_count: lowStock.length,
-          low_stock_products: lowStock.map(p => ({
-            id: p.id,
-            code: p.code,
-            name: p.name,
-            stock_quantity: p.stock_quantity,
-            unit: p.unit,
-            selling_price: p.selling_price,
-          })),
-          recent_invoices: localInvs.slice(0, 5).map(inv => ({
-            id: typeof inv.id === 'number' ? inv.id : 0,
-            invoice_number: inv.invoice_number,
-            invoice_date: inv.invoice_date,
-            customer_name: inv.customer_name,
-            total_amount: inv.total_amount,
-            payment_mode: inv.payment_mode,
-            is_gst_bill: inv.is_gst_bill,
-          })),
-        });
-        setIsLoading(false);
-      }
+      setStats({
+        total_products: (localProds || []).length,
+        total_stock_units: (localProds || []).reduce((sum, p) => sum + (p.stock_quantity || 0), 0),
+        today_sales: Math.round(todaySales * 100) / 100,
+        today_bills_count: todayInvs.length,
+        low_stock_products_count: lowStock.length,
+        low_stock_products: lowStock.map(p => ({
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          stock_quantity: p.stock_quantity,
+          unit: p.unit,
+          selling_price: p.selling_price,
+        })),
+        recent_invoices: (localInvs || []).slice(0, 5).map(inv => ({
+          id: typeof inv.id === 'number' ? inv.id : 0,
+          invoice_number: inv.invoice_number,
+          invoice_date: inv.invoice_date,
+          customer_name: inv.customer_name,
+          total_amount: inv.total_amount,
+          payment_mode: inv.payment_mode,
+          is_gst_bill: inv.is_gst_bill,
+        })),
+      });
+      setIsLoading(false);
     } catch (e) {
       console.warn('Error computing local stats:', e);
+      setIsLoading(false);
     }
   };
 
@@ -71,7 +70,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenInvoice 
     try {
       setError(null);
       const data = await api.getDashboardStats();
-      setStats(data);
+      if (data && typeof data === 'object' && 'total_products' in data) {
+        setStats(data);
+      } else {
+        await computeLocalStats();
+      }
     } catch (err: any) {
       console.warn('Network error loading dashboard metrics, computing from local offline DB', err);
       await computeLocalStats();
@@ -85,6 +88,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onOpenInvoice 
       fetchStats();
     });
   }, []);
+
 
   const handlePrintRecent = async (invId: number) => {
     try {

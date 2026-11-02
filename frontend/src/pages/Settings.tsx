@@ -47,6 +47,26 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSettingsUpdated 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Sync formData whenever settings prop updates
+  React.useEffect(() => {
+    if (settings) {
+      setFormData({
+        shop_name: settings.shop_name,
+        address: settings.address,
+        gstin: settings.gstin || '',
+        email: settings.email || '',
+        contact_no: settings.contact_no || '',
+        state: settings.state,
+        state_code: settings.state_code,
+        invoice_prefix: settings.invoice_prefix,
+        device_invoice_prefix: settings.device_invoice_prefix || 'INV-DEV1-',
+        next_invoice_number: settings.next_invoice_number,
+        default_terms: settings.default_terms,
+        default_is_gst: settings.default_is_gst,
+      });
+    }
+  }, [settings]);
+
   // Handle local seal selection for preview
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -75,13 +75,15 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
   // Load products & previous customers for instant auto-completion
   const loadProductsAndCustomers = async () => {
     const local = await offlineStorage.getProducts();
-    if (local && local.length > 0) {
+    if (Array.isArray(local) && local.length > 0) {
       setProducts(local);
     }
     try {
       const data = await api.getProducts();
-      setProducts(data);
-      await offlineStorage.setProducts(data);
+      if (Array.isArray(data) && data.length > 0) {
+        setProducts(data);
+        await offlineStorage.setProducts(data);
+      }
     } catch (err) {
       console.warn('Network error loading products, using offline store', err);
     }

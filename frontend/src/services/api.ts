@@ -30,6 +30,24 @@ export const apiClient = axios.create({
   },
 });
 
+// Guard against static host SPA rewrites returning HTML strings for /api calls
+apiClient.interceptors.response.use(
+  (response) => {
+    if (
+      typeof response.data === 'string' &&
+      (response.data.trim().startsWith('<!doctype') ||
+       response.data.trim().startsWith('<!DOCTYPE') ||
+       response.data.trim().startsWith('<html'))
+    ) {
+      return Promise.reject(new Error('Invalid API response: Server returned HTML page instead of JSON API response.'));
+    }
+    return response;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 
 export interface Product {
   id: number;
@@ -200,13 +218,101 @@ export interface DashboardStats {
   }>;
 }
 
+export const DEFAULT_SHOP_SETTINGS: ShopSettings = {
+  id: 1,
+  shop_name: 'K.N. 181. Kanyakumari Mahathma Gandhi Human Resource Management & Skill Development Co-operative Society Ltd.',
+  address: '12-145, 142G/1, S.A. Complex, Pampanvilai Road, Asaripallam-629201, Kanyakumari Dist.',
+  gstin: '33AAKAK0961H1ZP',
+  email: 'kmghrmsdcooperativesociety@gmail.com',
+  contact_no: '8015913892',
+  state: 'Tamilnadu',
+  state_code: '33',
+  invoice_prefix: 'INV-',
+  device_invoice_prefix: 'INV-DEV1-',
+  next_invoice_number: 1,
+  default_terms: '1. Goods once sold will not be taken back.\n2. Any damages during Transport, report immediate in front of Driver / Delivery Person.\n3. Warranty norms as per the product with guide.',
+  seal_image_path: null,
+  default_is_gst: true,
+  updated_at: new Date().toISOString(),
+};
+
+export const DEFAULT_INITIAL_PRODUCTS: Product[] = [
+  {
+    id: 1,
+    code: 'EL-001',
+    name: 'LED 20W Tube Light',
+    unit: 'Nos',
+    selling_price: 240.00,
+    gst_rate: 18.0,
+    stock_quantity: 45.0,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 2,
+    code: 'EL-002',
+    name: 'Ceiling Fan 1200mm',
+    unit: 'Nos',
+    selling_price: 1850.00,
+    gst_rate: 18.0,
+    stock_quantity: 12.0,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 3,
+    code: 'CAB-01',
+    name: 'Copper Cable 2.5 sq mm (90m Roll)',
+    unit: 'Box',
+    selling_price: 1450.00,
+    gst_rate: 18.0,
+    stock_quantity: 8.0,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 4,
+    code: 'SW-005',
+    name: 'Modular Switch 6A',
+    unit: 'Pcs',
+    selling_price: 35.00,
+    gst_rate: 18.0,
+    stock_quantity: 150.0,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 5,
+    code: 'CON-10',
+    name: 'PVC Conduit Pipe 25mm (3m)',
+    unit: 'Mtr',
+    selling_price: 65.00,
+    gst_rate: 18.0,
+    stock_quantity: 25.0,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
 // API Functions
 export const api = {
   // Products
   async getProducts(search?: string): Promise<Product[]> {
-    const params = search ? { search } : {};
-    const res = await apiClient.get<Product[]>('/products', { params });
-    return res.data;
+    try {
+      const params = search ? { search } : {};
+      const res = await apiClient.get<Product[]>('/products', { params });
+      if (Array.isArray(res.data)) {
+        return res.data;
+      }
+      return [];
+    } catch {
+      return [];
+    }
   },
 
   async createProduct(data: ProductCreate): Promise<Product> {
@@ -236,9 +342,16 @@ export const api = {
 
   // Invoices
   async getInvoices(search?: string): Promise<InvoiceSummary[]> {
-    const params = search ? { search } : {};
-    const res = await apiClient.get<InvoiceSummary[]>('/invoices', { params });
-    return res.data;
+    try {
+      const params = search ? { search } : {};
+      const res = await apiClient.get<InvoiceSummary[]>('/invoices', { params });
+      if (Array.isArray(res.data)) {
+        return res.data;
+      }
+      return [];
+    } catch {
+      return [];
+    }
   },
 
   async getInvoice(id: number): Promise<Invoice> {
@@ -253,13 +366,23 @@ export const api = {
 
   async getDashboardStats(): Promise<DashboardStats> {
     const res = await apiClient.get<DashboardStats>('/invoices/stats/dashboard');
-    return res.data;
+    if (res.data && typeof res.data === 'object' && 'total_products' in res.data) {
+      return res.data;
+    }
+    throw new Error('Invalid dashboard stats format');
   },
 
   // Settings
   async getSettings(): Promise<ShopSettings> {
-    const res = await apiClient.get<ShopSettings>('/settings');
-    return res.data;
+    try {
+      const res = await apiClient.get<ShopSettings>('/settings');
+      if (res.data && typeof res.data === 'object' && res.data.shop_name) {
+        return res.data;
+      }
+      return DEFAULT_SHOP_SETTINGS;
+    } catch {
+      return DEFAULT_SHOP_SETTINGS;
+    }
   },
 
   async updateSettings(data: Partial<ShopSettings>): Promise<ShopSettings> {

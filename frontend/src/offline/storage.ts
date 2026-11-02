@@ -1,5 +1,12 @@
 import { db, OfflineOutboxItem, OfflineConflict, OfflineSettingsRecord } from './db';
-import { Product, Invoice, InvoiceCreate, ShopSettings } from '../services/api';
+import { 
+  Product, 
+  Invoice, 
+  InvoiceCreate, 
+  ShopSettings,
+  DEFAULT_SHOP_SETTINGS,
+  DEFAULT_INITIAL_PRODUCTS
+} from '../services/api';
 
 export function numberToWordsIndian(num: number): string {
   if (num === null || num === undefined || isNaN(num)) return '';
@@ -64,10 +71,16 @@ export function numberToWordsIndian(num: number): string {
 export const offlineStorage = {
   // Products
   async getProducts(): Promise<Product[]> {
-    return await db.products.toArray();
+    const local = await db.products.toArray();
+    if (!local || local.length === 0) {
+      await db.products.bulkPut(DEFAULT_INITIAL_PRODUCTS);
+      return DEFAULT_INITIAL_PRODUCTS;
+    }
+    return local;
   },
 
   async setProducts(products: Product[]): Promise<void> {
+    if (!Array.isArray(products) || products.length === 0) return;
     await db.products.clear();
     await db.products.bulkPut(products);
   },
@@ -77,8 +90,19 @@ export const offlineStorage = {
   },
 
   // Settings
-  async getSettings(): Promise<OfflineSettingsRecord | undefined> {
-    return await db.settings.get(1);
+  async getSettings(): Promise<OfflineSettingsRecord> {
+    const current = await db.settings.get(1);
+    if (!current || !current.shop_name) {
+      const initial: OfflineSettingsRecord = {
+        ...DEFAULT_SHOP_SETTINGS,
+        id: 1,
+        cached_seal_base64: null,
+        device_counter: 1,
+      };
+      await db.settings.put(initial);
+      return initial;
+    }
+    return current;
   },
 
   async setSettings(settings: ShopSettings, sealBase64?: string | null): Promise<void> {

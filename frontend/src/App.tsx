@@ -6,10 +6,11 @@ import { Products } from './pages/Products';
 import { InvoiceHistory } from './pages/InvoiceHistory';
 import { Settings } from './pages/Settings';
 import { InvoicePrint } from './printing/InvoicePrint';
-import { api, ShopSettings, Invoice } from './services/api';
+import { api, ShopSettings, Invoice, DEFAULT_SHOP_SETTINGS } from './services/api';
 import { offlineStorage } from './offline/storage';
 import { SyncProvider } from './context/SyncContext';
 import { SyncStatusBadge } from './components/SyncStatusBadge';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Menu } from 'lucide-react';
 
 const PAGE_TITLES: Record<PageId, string> = {
@@ -22,8 +23,7 @@ const PAGE_TITLES: Record<PageId, string> = {
 
 const AppContent: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
-  const [settings, setSettings] = useState<ShopSettings | null>(null);
-  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [settings, setSettings] = useState<ShopSettings>(DEFAULT_SHOP_SETTINGS);
   const [activeInvoiceForPrint, setActiveInvoiceForPrint] = useState<Invoice | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
@@ -49,33 +49,35 @@ const AppContent: React.FC = () => {
   };
 
   const fetchSettings = async () => {
+    // 1. Immediate instant hydration from local offline storage
     try {
-      setIsLoadingSettings(true);
-      // Attempt backend API first
-      const data = await api.getSettings();
-      let sealBase64: string | undefined = undefined;
       const local = await offlineStorage.getSettings();
-      if (data.seal_image_path) {
-        if (local?.cached_seal_base64) {
-          sealBase64 = local.cached_seal_base64;
-        } else {
-          const b64 = await api.getSealImageBase64();
-          if (b64) sealBase64 = b64;
-        }
-      } else {
-        sealBase64 = null as any;
-      }
-      await offlineStorage.setSettings(data, sealBase64);
-      setSettings(sealBase64 ? ({ ...data, cached_seal_base64: sealBase64 } as any) : data);
-    } catch (err) {
-      console.warn('Failed to fetch settings from server, falling back to local store', err);
-      // Fallback to local Dexie store
-      const local = await offlineStorage.getSettings();
-      if (local) {
+      if (local && local.shop_name) {
         setSettings(local);
       }
-    } finally {
-      setIsLoadingSettings(false);
+    } catch (e) {
+      console.warn('Could not read offline settings:', e);
+    }
+
+    // 2. Fetch latest settings from server
+    try {
+      const data = await api.getSettings();
+      if (data && data.shop_name) {
+        let sealBase64: string | undefined = undefined;
+        const local = await offlineStorage.getSettings();
+        if (data.seal_image_path) {
+          if (local?.cached_seal_base64) {
+            sealBase64 = local.cached_seal_base64;
+          } else {
+            const b64 = await api.getSealImageBase64();
+            if (b64) sealBase64 = b64;
+          }
+        }
+        await offlineStorage.setSettings(data, sealBase64);
+        setSettings(sealBase64 ? ({ ...data, cached_seal_base64: sealBase64 } as any) : data);
+      }
+    } catch (err) {
+      console.warn('Network error fetching settings from server, using local store', err);
     }
   };
 
@@ -157,41 +159,34 @@ const AppContent: React.FC = () => {
 
         {/* Dynamic Page Views */}
         <main className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto flex-1">
-          {isLoadingSettings && !settings ? (
-            <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
-              <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mr-3"></div>
-              Loading system configuration...
-            </div>
-          ) : (
-            <>
-              {currentPage === 'dashboard' && settings && (
-                <Dashboard
-                  onNavigate={setCurrentPage}
-                  onOpenInvoice={handleOpenInvoice}
-                  settings={settings}
-                />
-              )}
-              {currentPage === 'billing' && settings && (
-                <Billing
-                  settings={settings}
-                  onInvoiceCreated={handleInvoiceCreated}
-                />
-              )}
-              {currentPage === 'products' && <Products />}
-              {currentPage === 'invoices' && settings && (
-                <InvoiceHistory
-                  settings={settings}
-                  onOpenInvoice={handleOpenInvoice}
-                />
-              )}
-              {currentPage === 'settings' && settings && (
-                <Settings
-                  settings={settings}
-                  onSettingsUpdated={handleSettingsUpdated}
-                />
-              )}
-            </>
-          )}
+          <ErrorBoundary>
+            {currentPage === 'dashboard' && (
+              <Dashboard
+                onNavigate={setCurrentPage}
+                onOpenInvoice={handleOpenInvoice}
+                settings={settings}
+              />
+            )}
+            {currentPage === 'billing' && (
+              <Billing
+                settings={settings}
+                onInvoiceCreated={handleInvoiceCreated}
+              />
+            )}
+            {currentPage === 'products' && <Products />}
+            {currentPage === 'invoices' && (
+              <InvoiceHistory
+                settings={settings}
+                onOpenInvoice={handleOpenInvoice}
+              />
+            )}
+            {currentPage === 'settings' && (
+              <Settings
+                settings={settings}
+                onSettingsUpdated={handleSettingsUpdated}
+              />
+            )}
+          </ErrorBoundary>
         </main>
       </div>
 
