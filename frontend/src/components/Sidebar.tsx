@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Receipt, 
@@ -7,7 +7,8 @@ import {
   Settings as SettingsIcon,
   Store,
   X,
-  Pin
+  PanelLeftClose,
+  Menu
 } from 'lucide-react';
 
 export type PageId = 'dashboard' | 'billing' | 'products' | 'invoices' | 'settings';
@@ -16,12 +17,13 @@ export interface SidebarProps {
   currentPage: PageId;
   onNavigate: (page: PageId) => void;
   shopName?: string;
+  isOpen?: boolean;
+  onToggle?: () => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
+  // Backward compatibility
   isPinned?: boolean;
   onTogglePin?: () => void;
-  // Backward compatibility
-  isOpen?: boolean;
   onClose?: () => void;
 }
 
@@ -29,52 +31,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentPage, 
   onNavigate, 
   shopName,
+  isOpen,
+  onToggle,
   isMobileOpen,
   onCloseMobile,
-  isPinned = false,
+  isPinned,
   onTogglePin,
-  isOpen,
   onClose,
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const [isFocusedWithin, setIsFocusedWithin] = useState(false);
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // Normalize mobile open state
-  const mobileOpen = isMobileOpen ?? isOpen ?? false;
+  const mobileOpen = isMobileOpen ?? false;
   const handleCloseMobile = onCloseMobile ?? onClose ?? (() => {});
 
-  // On desktop: expanded if hovered, focused within, or pinned
-  const isExpandedDesktop = isPinned || isHovered || isFocusedWithin;
+  // Desktop open state: synchronized directly with App layout padding
+  const isDesktopOpen = isOpen ?? isPinned ?? true;
+  const handleToggle = onToggle ?? onTogglePin ?? (() => {});
 
-  // Clean, debounced hover handling to prevent accidental collapse jitter
-  const handleMouseEnter = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setIsHovered(true);
-  };
-
-  const handleMouseLeave = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-    }
-    hoverTimeoutRef.current = setTimeout(() => {
-      setIsHovered(false);
-    }, 120);
-  };
-
-  // Keyboard focus capture to expand when navigating via Tab
-  const handleFocusCapture = () => {
-    setIsFocusedWithin(true);
-  };
-
-  const handleBlurCapture = (e: React.FocusEvent<HTMLElement>) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsFocusedWithin(false);
-    }
-  };
+  // Effective expanded state: on mobile if drawer is open, on desktop if sidebar is open
+  const isExpanded = mobileOpen || isDesktopOpen;
 
   // Lock body scroll when mobile drawer is open
   useEffect(() => {
@@ -87,29 +61,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [mobileOpen]);
 
-  // Handle Escape key to close mobile drawer or collapse hovered dock
+  // Handle Escape key to close mobile drawer
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (mobileOpen) {
-          handleCloseMobile();
-        } else if (isHovered) {
-          setIsHovered(false);
-        }
+      if (e.key === 'Escape' && mobileOpen) {
+        handleCloseMobile();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mobileOpen, isHovered, handleCloseMobile]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-      }
-    };
-  }, []);
+  }, [mobileOpen, handleCloseMobile]);
 
   const navItems = [
     {
@@ -158,52 +119,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* 
-        Fixed Icon Dock + Hover Reveal Sidebar:
-        - Mobile: Hidden by default (-translate-x-full), slides in when mobileOpen is true (z-50)
-        - Desktop: Always visible (lg:translate-x-0). Fixed at top-0 left-0 h-screen (z-40)
-        - Collapsed Desktop: 72px width (w-[72px])
-        - Expanded Desktop: 260px width (w-[260px]) with subtle elevation shadow
-        - Zero Layout Shift: The main content permanently reserves 72px (lg:pl-[72px]).
-          Expansion overlays the content area without shifting any elements.
+        Synchronized Sidebar:
+        - Mobile: Off-canvas drawer (z-50) sliding in/out
+        - Desktop: Fixed navigation dock synchronized with main content padding
+          * Open: 260px (Main window lg:pl-[260px])
+          * Closed: 72px (Main window lg:pl-[72px])
+          * Result: The window fluidly adjusts without any content overlap or UI break!
       */}
       <aside 
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onFocusCapture={handleFocusCapture}
-        onBlurCapture={handleBlurCapture}
         aria-label="Main Navigation"
-        className={`no-print bg-white border-r border-slate-200 flex flex-col h-screen select-none fixed top-0 left-0 z-40 transition-[width,transform,box-shadow] duration-250 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none overflow-visible ${
-          // Mobile classes
+        className={`no-print bg-white border-r border-slate-200 flex flex-col h-screen select-none fixed top-0 left-0 z-40 transition-[width,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none overflow-visible ${
           mobileOpen
             ? 'translate-x-0 w-[260px] shadow-2xl shadow-slate-900/20 z-50'
             : '-translate-x-full lg:translate-x-0'
         } ${
-          // Desktop classes: pinned integrates cleanly into layout; hover overlays with drop-shadow
-          isPinned
+          isDesktopOpen
             ? 'lg:w-[260px] lg:shadow-none'
-            : isHovered || isFocusedWithin
-            ? 'lg:w-[260px] lg:shadow-xl lg:shadow-slate-900/10'
             : 'lg:w-[72px] lg:shadow-none'
         }`}
       >
-        {/* Outer clip container for internal layout while permitting external tooltips */}
         <div className="w-full flex flex-col h-full overflow-hidden">
           {/* Brand Header (h-16 aligns with top navbar) */}
           <div className="h-16 border-b border-slate-100 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950 text-white flex items-center px-2 relative flex-shrink-0">
             {/* Centered Brand Icon Wrapper (56px wide, perfectly centered in 72px dock: 8px + 28px = 36px) */}
             <div className="w-[56px] h-full flex items-center justify-center flex-shrink-0">
-              <div 
-                className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-400 flex items-center justify-center font-bold text-lg text-white shadow-md shadow-indigo-900/50 flex-shrink-0"
-                title={shopName || 'Shop Billing'}
+              <button
+                type="button"
+                onClick={handleToggle}
+                className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-400 flex items-center justify-center font-bold text-lg text-white shadow-md shadow-indigo-900/50 flex-shrink-0 hover:scale-105 active:scale-95 transition-transform"
+                title={isDesktopOpen ? (shopName || 'Shop Billing') : 'Expand sidebar'}
+                aria-label={isDesktopOpen ? 'Collapse sidebar' : 'Expand sidebar'}
               >
                 <Store className="w-5 h-5 text-white" />
-              </div>
+              </button>
             </div>
 
             {/* Expanded Brand Name & Subtitle */}
             <div 
               className={`ml-1 flex-1 flex flex-col justify-center overflow-hidden whitespace-nowrap transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${
-                (isExpandedDesktop || mobileOpen)
+                isExpanded
                   ? 'opacity-100 translate-x-0'
                   : 'opacity-0 -translate-x-2 pointer-events-none'
               }`}
@@ -217,24 +171,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </p>
             </div>
 
-            {/* Desktop Pin Toggle Button */}
-            {onTogglePin && (
-              <button 
-                onClick={onTogglePin}
-                className={`hidden lg:flex p-1.5 rounded-lg transition-colors ml-auto mr-1 text-slate-400 hover:text-white hover:bg-white/10 ${
-                  isPinned ? 'text-indigo-300 bg-white/10' : ''
-                } ${
-                  isExpandedDesktop ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`}
-                title={isPinned ? "Unpin sidebar (hover mode)" : "Pin sidebar"}
-                aria-label={isPinned ? "Unpin sidebar (hover mode)" : "Pin sidebar"}
-              >
-                <Pin className={`w-3.5 h-3.5 transition-transform ${isPinned ? 'rotate-45 text-emerald-400' : ''}`} />
-              </button>
-            )}
+            {/* Desktop Collapse Toggle Button */}
+            <button 
+              type="button"
+              onClick={handleToggle}
+              className={`hidden lg:flex p-1.5 rounded-lg transition-colors ml-auto mr-1 text-slate-400 hover:text-white hover:bg-white/10 ${
+                isDesktopOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+            >
+              <PanelLeftClose className="w-4 h-4 text-slate-300 hover:text-white" />
+            </button>
 
             {/* Mobile Close Button */}
             <button 
+              type="button"
               onClick={handleCloseMobile}
               className="lg:hidden p-1.5 text-slate-300 hover:text-white rounded-lg hover:bg-white/10 transition-colors ml-auto mr-1"
               title="Close menu"
@@ -252,7 +204,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Subtle Menu Category Header in Expanded State */}
             <div 
               className={`px-3 py-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase whitespace-nowrap transition-all duration-200 ${
-                (isExpandedDesktop || mobileOpen)
+                isExpanded
                   ? 'opacity-100 h-auto'
                   : 'opacity-0 h-2 pointer-events-none'
               }`}
@@ -263,7 +215,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id;
-              const isItemExpanded = isExpandedDesktop || mobileOpen;
 
               return (
                 <div key={item.id} className="relative group">
@@ -301,7 +252,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {/* Navigation Label (smooth fade & slide) */}
                     <div 
                       className={`ml-1 flex-1 flex items-center justify-between overflow-hidden whitespace-nowrap transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${
-                        isItemExpanded
+                        isExpanded
                           ? 'opacity-100 translate-x-0'
                           : 'opacity-0 -translate-x-2 pointer-events-none'
                       }`}
@@ -316,13 +267,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     Helpful Tooltip on Hover in Collapsed Desktop State
                     Shown only when collapsed, anchored outside dock at left-[76px]
                   */}
-                  {!isItemExpanded && (
+                  {!isExpanded && (
                     <div 
                       role="tooltip"
                       className="hidden lg:flex items-center absolute left-[76px] top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xl shadow-slate-900/25 whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150"
                     >
                       <span>{item.label}</span>
-                      {/* Tooltip Arrow Pointer */}
                       <span 
                         className="absolute -left-1 top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900" 
                         aria-hidden="true"
@@ -347,7 +297,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Expanded Footer Details */}
             <div 
               className={`ml-1 flex-1 flex items-center justify-between overflow-hidden whitespace-nowrap transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${
-                (isExpandedDesktop || mobileOpen)
+                isExpanded
                   ? 'opacity-100 translate-x-0'
                   : 'opacity-0 -translate-x-2 pointer-events-none'
               }`}

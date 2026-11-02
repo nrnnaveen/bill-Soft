@@ -12,26 +12,37 @@ import { SyncProvider } from './context/SyncContext';
 import { SyncStatusBadge } from './components/SyncStatusBadge';
 import { Menu } from 'lucide-react';
 
+const PAGE_TITLES: Record<PageId, string> = {
+  dashboard: 'Dashboard',
+  billing: 'Create Bill',
+  products: 'Products & Inventory',
+  invoices: 'Invoice History',
+  settings: 'Shop Settings',
+};
+
 const AppContent: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [settings, setSettings] = useState<ShopSettings | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [activeInvoiceForPrint, setActiveInvoiceForPrint] = useState<Invoice | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSidebarPinned, setIsSidebarPinned] = useState<boolean>(() => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('shop_billing_sidebar_pinned');
-      return saved === 'true';
+      const saved = localStorage.getItem('shop_billing_sidebar_open');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+      return typeof window !== 'undefined' ? window.innerWidth >= 1024 : true;
     } catch {
-      return false;
+      return true;
     }
   });
 
-  const handleTogglePin = () => {
-    setIsSidebarPinned(prev => {
+  const handleToggleSidebar = () => {
+    setIsSidebarOpen(prev => {
       const next = !prev;
       try {
-        localStorage.setItem('shop_billing_sidebar_pinned', String(next));
+        localStorage.setItem('shop_billing_sidebar_open', String(next));
       } catch {}
       return next;
     });
@@ -87,21 +98,21 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex text-slate-800 antialiased font-sans">
-      {/* Fixed Icon Dock + Hover Reveal Sidebar */}
+      {/* Synchronized Sidebar Navigation */}
       <Sidebar
         currentPage={currentPage}
         onNavigate={setCurrentPage}
         shopName={settings?.shop_name}
+        isOpen={isSidebarOpen}
+        onToggle={handleToggleSidebar}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
-        isPinned={isSidebarPinned}
-        onTogglePin={handleTogglePin}
       />
 
-      {/* Main Content Area: Automatically adjusts window layout when sidebar is open (260px) or docked (72px) */}
+      {/* Main Content Area: Synchronized with sidebar width so the window fluidly adjusts without any content overlap */}
       <div 
         className={`flex-1 flex flex-col min-w-0 overflow-y-auto h-screen transition-[padding] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-          isSidebarPinned ? 'lg:pl-[260px]' : 'lg:pl-[72px]'
+          isSidebarOpen ? 'lg:pl-[260px]' : 'lg:pl-[72px]'
         } ${activeInvoiceForPrint ? 'print:hidden' : ''}`}
       >
         {/* Top Navbar */}
@@ -117,18 +128,22 @@ const AppContent: React.FC = () => {
               <Menu className="w-5 h-5" />
             </button>
 
-            {/* Desktop Pin Toggle Button */}
+            {/* Desktop Menu Toggle Button */}
             <button
-              onClick={handleTogglePin}
+              onClick={handleToggleSidebar}
               className="hidden lg:flex p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
-              title={isSidebarPinned ? "Unpin sidebar (hover mode)" : "Pin sidebar"}
-              aria-label={isSidebarPinned ? "Unpin sidebar (hover mode)" : "Pin sidebar"}
+              title={isSidebarOpen ? "Collapse sidebar (72px dock)" : "Expand sidebar (260px)"}
+              aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
             >
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-2">
-              <span className="text-base font-bold text-slate-900 tracking-tight truncate max-w-[200px] sm:max-w-md">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base font-bold text-slate-900 tracking-tight">
+                {PAGE_TITLES[currentPage]}
+              </span>
+              <span className="hidden sm:inline-block text-slate-300 font-normal">|</span>
+              <span className="hidden sm:inline-block text-xs text-slate-500 font-medium truncate max-w-xs md:max-w-md">
                 {settings?.shop_name || 'Shop Billing'}
               </span>
             </div>
