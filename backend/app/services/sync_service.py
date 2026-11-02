@@ -76,7 +76,7 @@ def process_push(db: Session, request: SyncPushRequest) -> SyncPushResponse:
     for adj in request.stock_adjustments:
         prod = db.query(Product).filter(Product.id == adj.product_id).first()
         if prod:
-            prod.stock_quantity = round(prod.stock_quantity + adj.quantity, 2)
+            prod.stock_quantity = max(0.0, round(prod.stock_quantity + adj.quantity, 2))
             record_movement(
                 db=db,
                 product_id=prod.id,

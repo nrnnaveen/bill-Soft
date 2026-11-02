@@ -330,10 +330,10 @@ def create_invoice_transactional(
             item_model.invoice_id = invoice.id
             db.add(item_model)
 
-            # Deduct stock if linked to a product
+            # Deduct stock if linked to a product (clamped to 0.0 minimum - physical stock cannot be negative)
             if item_model.product_id and item_model.product_id in product_cache:
                 prod = product_cache[item_model.product_id]
-                prod.stock_quantity = round(prod.stock_quantity - item_model.quantity, 2)
+                prod.stock_quantity = max(0.0, round(prod.stock_quantity - item_model.quantity, 2))
                 movement_type = "SALE_OFFLINE" if allow_negative_stock else "SALE"
                 record_movement(
                     db=db,

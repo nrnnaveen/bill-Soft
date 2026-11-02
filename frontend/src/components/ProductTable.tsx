@@ -58,8 +58,9 @@ export const ProductTable: React.FC<ProductTableProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {products.map((p) => {
-              const isOutOfStock = p.stock_quantity <= 0;
-              const isLowStock = p.stock_quantity > 0 && p.stock_quantity <= 5;
+              const safeStock = Math.max(0, p.stock_quantity);
+              const isOutOfStock = safeStock <= 0;
+              const isLowStock = safeStock > 0 && safeStock <= 5;
 
               return (
                 <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
@@ -81,7 +82,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     {p.gst_rate}%
                   </td>
                   <td className="py-3.5 px-4 text-right font-bold text-slate-900">
-                    {p.stock_quantity.toLocaleString()} {p.unit}
+                    {safeStock.toLocaleString()} {p.unit}
                   </td>
                   <td className="py-3.5 px-4 text-center">
                     {isOutOfStock ? (

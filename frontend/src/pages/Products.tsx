@@ -563,7 +563,7 @@ export const Products: React.FC = () => {
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
                 <span className="text-slate-600">Current Stock:</span>
                 <span className="font-bold font-mono text-slate-900">
-                  {restockingProduct.stock_quantity} {restockingProduct.unit}
+                  {Math.max(0, restockingProduct.stock_quantity)} {restockingProduct.unit}
                 </span>
               </div>
 
@@ -618,7 +618,7 @@ export const Products: React.FC = () => {
               <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-between text-xs font-semibold text-emerald-800">
                 <span>New Total Balance:</span>
                 <span className="font-bold font-mono">
-                  {(restockingProduct.stock_quantity + (Number(restockQty) || 0)).toFixed(2)} {restockingProduct.unit}
+                  {(Math.max(0, restockingProduct.stock_quantity) + (Number(restockQty) || 0)).toFixed(2)} {restockingProduct.unit}
                 </span>
               </div>
 
