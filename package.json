@@ -1,0 +1,11 @@
+{
+  "name": "shop-billing-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production Shop Billing, Inventory Tracking, Supabase PostgreSQL & Storage",
+  "scripts": {
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "vercel-build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview"
+  }
+}

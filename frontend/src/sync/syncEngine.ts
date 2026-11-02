@@ -171,7 +171,16 @@ class SyncEngine {
         await offlineStorage.setProducts(pullData.products);
       }
 
-      if (pullData.invoices && pullData.invoices.length > 0) {
+      if (pullData.invoices) {
+        // Prune any locally cached synced invoices that no longer exist on the server
+        const serverIds = new Set(pullData.invoices.map((i: any) => i.id));
+        const localInvs = await db.invoices.toArray();
+        for (const local of localInvs) {
+          if (local.is_synced && !serverIds.has(local.id)) {
+            await db.invoices.delete(local.id);
+          }
+        }
+
         // Merge recent server invoice summaries into offline cache if not present
         for (const sInv of pullData.invoices) {
           const existing = await db.invoices.get(sInv.id);

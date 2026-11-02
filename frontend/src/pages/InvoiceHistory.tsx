@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, InvoiceSummary, Invoice, ShopSettings } from '../services/api';
 import { offlineStorage } from '../offline/storage';
+import { db } from '../offline/db';
 import { 
   History, 
   Search, 
@@ -28,6 +29,16 @@ export const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ onOpenInvoice })
       setError(null);
       const data = await api.getInvoices(searchTerm);
       setInvoices(data);
+      if (!searchTerm) {
+        // Prune any locally cached synced invoices that no longer exist on server
+        const serverIds = new Set(data.map(i => i.id));
+        const localInvs = await db.invoices.toArray();
+        for (const local of localInvs) {
+          if (local.is_synced && !serverIds.has(local.id as number)) {
+            await db.invoices.delete(local.id);
+          }
+        }
+      }
     } catch (err: any) {
       console.warn('Network error fetching invoices, reading local offline store', err);
       try {
