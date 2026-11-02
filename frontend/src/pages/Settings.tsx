@@ -647,7 +647,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSettingsUpdated 
         </div>
 
         {/* Live Database Info Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
             <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Database Engine</span>
             <div className="font-bold text-sm text-slate-900 mt-1 flex items-center gap-1.5">
@@ -661,26 +661,46 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSettingsUpdated 
           </div>
 
           <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Connection Health</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Database Read</span>
             <div className="font-bold text-sm mt-1 flex items-center gap-1.5">
-              {dbStatus?.connected ? (
+              {dbStatus?.database_read_verified ? (
                 <span className="text-emerald-700 flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Connected
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Read Verified
                 </span>
               ) : (
                 <span className="text-rose-700 flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4 text-rose-600" /> Disconnected / Degraded
+                  <AlertCircle className="w-4 h-4 text-rose-600" /> Disconnected
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-slate-500 mt-0.5">Live heartbeat check</p>
+            <p className="text-[10px] text-slate-500 mt-0.5 font-mono">Live query (SELECT 1)</p>
           </div>
 
           <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Production Safety Guard</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Supabase Storage</span>
+            <div className="font-bold text-sm mt-1 flex items-center gap-1.5">
+              {dbStatus?.supabase_cloud_reachable ? (
+                <span className="text-emerald-700 flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Connected
+                </span>
+              ) : dbStatus?.supabase_configured ? (
+                <span className="text-amber-700 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4 text-amber-600" /> Cloud Connecting...
+                </span>
+              ) : (
+                <span className="text-slate-500 flex items-center gap-1">
+                  Local Mode
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-0.5 font-mono">Bucket: shop-assets</p>
+          </div>
+
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Production Guard</span>
             <div className="font-bold text-sm mt-1">
               {dbStatus?.require_supabase || dbStatus?.environment === 'production' ? (
-                <span className="text-purple-700 font-semibold">Strict (No SQLite Fallback)</span>
+                <span className="text-purple-700 font-semibold">Strict Guard Active</span>
               ) : (
                 <span className="text-slate-700 font-medium">Development Mode</span>
               )}

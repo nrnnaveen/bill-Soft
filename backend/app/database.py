@@ -79,19 +79,40 @@ def get_database_status() -> dict:
     else:
         target = "Local SQLite (data/shop_billing.db)"
 
+    # Live Database read verification (SELECT 1)
+    db_read_verified = False
     try:
         from sqlalchemy import text
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        connected = True
+        db_read_verified = True
     except Exception:
-        connected = False
+        db_read_verified = False
+
+    # Supabase Cloud Storage & REST reachability check
+    supabase_configured = bool(os.getenv("SUPABASE_URL", "").strip() and os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip())
+    supabase_cloud_reachable = False
+    if supabase_configured:
+        try:
+            from .services.storage_service import get_supabase_client
+            client = get_supabase_client()
+            if client:
+                buckets = client.storage.list_buckets()
+                supabase_cloud_reachable = True
+        except Exception:
+            supabase_cloud_reachable = False
+
+    status_label = "connected" if db_read_verified else "disconnected"
 
     return {
         "engine": engine.dialect.name,
         "is_cloud_database": is_pg,
         "database_target": target,
-        "connected": connected,
+        "connected": db_read_verified,
+        "database_read_verified": db_read_verified,
+        "supabase_configured": supabase_configured,
+        "supabase_cloud_reachable": supabase_cloud_reachable,
+        "status": status_label,
         "environment": APP_ENV,
         "require_supabase": REQUIRE_SUPABASE,
     }

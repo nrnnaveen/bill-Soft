@@ -488,8 +488,14 @@ def test_suite():
     assert get_seal_bytes("local://../../../../etc/passwd") is None, "Must block path traversal attempts"
     print("[PASS] 18c. Security: Path traversal strictly blocked by storage service.")
 
+    # 19. Supabase Cloud Connectivity & Verification
+    from scripts.verify_supabase import run_audit
+    supa_audit_ok = run_audit()
+    assert supa_audit_ok, "Supabase verification audit must pass all checks"
+    print("[PASS] 19. Supabase Cloud: Reachable, authenticated, storage active, and CRUD verified.")
+
     print("==================================================")
-    print("ALL TESTS PASSED SUCCESSFULLY! (22/22 checks)")
+    print("ALL TESTS PASSED SUCCESSFULLY! (23/23 checks)")
     print("==================================================")
 
 
