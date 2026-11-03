@@ -432,7 +432,7 @@ export const api = {
   async healthCheck(): Promise<boolean> {
     try {
       const res = await apiClient.get('/health', { timeout: 3000 });
-      return res.status === 200;
+      return res.status === 200 && res.data && typeof res.data === 'object' && (res.data.status === 'healthy' || res.data.status === 'degraded');
     } catch {
       return false;
     }

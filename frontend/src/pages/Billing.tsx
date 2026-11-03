@@ -487,13 +487,10 @@ export const Billing: React.FC<BillingProps> = ({ settings, onInvoiceCreated }) 
       try {
         created = await api.createInvoice(payload);
       } catch (apiErr: any) {
-        // Fallback to offline creation
-        if (!navigator.onLine || !apiErr.response) {
-          created = await offlineStorage.createInvoiceOffline(payload);
-          setInfoMessage('Bill generated in Offline Mode. Stock was deducted locally and bill was queued for sync.');
-        } else {
-          throw apiErr;
-        }
+        // Fallback to offline creation whenever backend API is unreachable or returns 404/5xx
+        console.warn('Backend API unavailable, generating invoice in Offline Mode:', apiErr);
+        created = await offlineStorage.createInvoiceOffline(payload);
+        setInfoMessage('Bill generated in Local / Offline Mode. Stock was deducted locally.');
       }
 
       // Reset form

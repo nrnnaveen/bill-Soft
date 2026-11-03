@@ -134,9 +134,10 @@ export const Products: React.FC = () => {
     try {
       setIsMovementsLoading(true);
       const data = await api.getProductMovements(p.id);
-      setMovements(data);
+      setMovements(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to load stock movements', err);
+      console.warn('Failed to load stock movements from server, using local records:', err);
+      setMovements([]);
     } finally {
       setIsMovementsLoading(false);
     }
@@ -153,11 +154,16 @@ export const Products: React.FC = () => {
     try {
       setIsSaving(true);
       setError(null);
-      await api.createProduct(formData);
+      try {
+        await api.createProduct(formData);
+      } catch (apiErr) {
+        console.warn('API unavailable, saving product locally:', apiErr);
+        await offlineStorage.createProductOffline(formData);
+      }
       setIsAddModalOpen(false);
       fetchProducts();
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to create product.');
+      setError(err?.response?.data?.detail || err?.message || 'Failed to create product.');
     } finally {
       setIsSaving(false);
     }
@@ -171,11 +177,16 @@ export const Products: React.FC = () => {
     try {
       setIsSaving(true);
       setError(null);
-      await api.updateProduct(editingProduct.id, formData);
+      try {
+        await api.updateProduct(editingProduct.id, formData);
+      } catch (apiErr) {
+        console.warn('API unavailable, updating product locally:', apiErr);
+        await offlineStorage.updateProductOffline(editingProduct.id, formData);
+      }
       setEditingProduct(null);
       fetchProducts();
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to update product.');
+      setError(err?.response?.data?.detail || err?.message || 'Failed to update product.');
     } finally {
       setIsSaving(false);
     }
@@ -189,11 +200,16 @@ export const Products: React.FC = () => {
     try {
       setIsSaving(true);
       setError(null);
-      await api.restockProduct(restockingProduct.id, restockQty, restockNotes);
+      try {
+        await api.restockProduct(restockingProduct.id, restockQty, restockNotes);
+      } catch (apiErr) {
+        console.warn('API unavailable, restocking product locally:', apiErr);
+        await offlineStorage.restockProductOffline(restockingProduct.id, restockQty, restockNotes);
+      }
       setRestockingProduct(null);
       fetchProducts();
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to restock product.');
+      setError(err?.response?.data?.detail || err?.message || 'Failed to restock product.');
     } finally {
       setIsSaving(false);
     }
@@ -205,10 +221,15 @@ export const Products: React.FC = () => {
       return;
     }
     try {
-      await api.deleteProduct(p.id);
+      try {
+        await api.deleteProduct(p.id);
+      } catch (apiErr) {
+        console.warn('API unavailable, deactivating product locally:', apiErr);
+        await offlineStorage.deleteProductOffline(p.id);
+      }
       fetchProducts();
     } catch (err: any) {
-      alert(err?.response?.data?.detail || 'Failed to deactivate product.');
+      alert(err?.response?.data?.detail || err?.message || 'Failed to deactivate product.');
     }
   };
 

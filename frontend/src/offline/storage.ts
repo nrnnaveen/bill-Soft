@@ -89,6 +89,102 @@ export const offlineStorage = {
     await db.products.put(product);
   },
 
+  async createProductOffline(data: { code: string; name: string; unit: string; selling_price: number; gst_rate: number; stock_quantity: number }): Promise<Product> {
+    const all = await db.products.toArray();
+    const nextId = all.length > 0 ? Math.max(...all.map(p => p.id || 0)) + 1 : 1;
+    const now = new Date().toISOString();
+    const newProd: Product = {
+      id: nextId,
+      code: data.code.trim(),
+      name: data.name.trim(),
+      unit: data.unit || 'Nos',
+      selling_price: Number(data.selling_price) || 0,
+      gst_rate: Number(data.gst_rate) || 0,
+      stock_quantity: Math.max(0, Number(data.stock_quantity) || 0),
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    };
+    await db.products.put(newProd);
+
+    // Queue in outbox
+    const clientUuid = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    await db.outbox.add({
+      client_uuid: clientUuid,
+      op_type: 'UPDATE_PRODUCT',
+      payload: newProd,
+      status: 'pending',
+      created_at: now,
+      retry_count: 0,
+    });
+
+    return newProd;
+  },
+
+  async restockProductOffline(id: number, quantity: number, notes?: string): Promise<Product> {
+    const prod = await db.products.get(id);
+    if (!prod) {
+      throw new Error(`Product with ID ${id} not found in local catalog.`);
+    }
+    const addQty = Math.max(0, Number(quantity) || 0);
+    prod.stock_quantity = Math.max(0, Math.round((prod.stock_quantity + addQty) * 100) / 100);
+    prod.updated_at = new Date().toISOString();
+    await db.products.put(prod);
+
+    const clientUuid = `adj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    await db.outbox.add({
+      client_uuid: clientUuid,
+      op_type: 'ADJUST_STOCK',
+      payload: {
+        product_id: id,
+        quantity: addQty,
+        notes: notes || 'Local restock',
+        adjustment_type: 'RESTOCK_LOCAL',
+      },
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      retry_count: 0,
+    });
+
+    return prod;
+  },
+
+  async updateProductOffline(id: number, data: { code?: string; name?: string; unit?: string; selling_price?: number; gst_rate?: number; stock_quantity?: number }): Promise<Product> {
+    const prod = await db.products.get(id);
+    if (!prod) {
+      throw new Error(`Product with ID ${id} not found in local catalog.`);
+    }
+    if (data.code !== undefined) prod.code = data.code.trim();
+    if (data.name !== undefined) prod.name = data.name.trim();
+    if (data.unit !== undefined) prod.unit = data.unit;
+    if (data.selling_price !== undefined) prod.selling_price = Number(data.selling_price) || 0;
+    if (data.gst_rate !== undefined) prod.gst_rate = Number(data.gst_rate) || 0;
+    if (data.stock_quantity !== undefined) prod.stock_quantity = Math.max(0, Number(data.stock_quantity) || 0);
+    prod.updated_at = new Date().toISOString();
+    await db.products.put(prod);
+
+    const clientUuid = `prod-upd-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    await db.outbox.add({
+      client_uuid: clientUuid,
+      op_type: 'UPDATE_PRODUCT',
+      payload: prod,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      retry_count: 0,
+    });
+
+    return prod;
+  },
+
+  async deleteProductOffline(id: number): Promise<void> {
+    const prod = await db.products.get(id);
+    if (prod) {
+      prod.is_active = false;
+      prod.updated_at = new Date().toISOString();
+      await db.products.put(prod);
+    }
+  },
+
   // Settings
   async getSettings(): Promise<OfflineSettingsRecord> {
     const current = await db.settings.get(1);
@@ -128,13 +224,14 @@ export const offlineStorage = {
   // Offline Invoice Creation
   async createInvoiceOffline(payload: InvoiceCreate): Promise<Invoice> {
     const settings = await this.getSettings();
-    const devicePrefix = settings?.device_invoice_prefix || 'INV-DEV1-';
-    const counter = settings?.device_counter || 1;
-    const offlineNumber = `${devicePrefix}${String(counter).padStart(4, '0')}`;
+    const prefix = settings?.invoice_prefix || 'INV-';
+    const counter = settings?.next_invoice_number || settings?.device_counter || 1;
+    const offlineNumber = `${prefix}${String(counter).padStart(4, '0')}`;
 
     // Update next counter
     if (settings) {
-      settings.device_counter = counter + 1;
+      settings.next_invoice_number = counter + 1;
+      settings.device_counter = (settings.device_counter || counter) + 1;
       await db.settings.put(settings);
     }
 

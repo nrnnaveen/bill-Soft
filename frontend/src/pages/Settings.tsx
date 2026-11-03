@@ -90,16 +90,37 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSettingsUpdated 
     try {
       setIsUploadingSeal(true);
       setErrorMessage(null);
-      const updated = await api.uploadSeal(sealFile);
-      const b64 = await api.getSealImageBase64();
-      await offlineStorage.setSettings(updated, b64 || undefined);
-      onSettingsUpdated(b64 ? ({ ...updated, cached_seal_base64: b64 } as any) : updated);
+      try {
+        const updated = await api.uploadSeal(sealFile);
+        const b64 = await api.getSealImageBase64();
+        await offlineStorage.setSettings(updated, b64 || undefined);
+        onSettingsUpdated(b64 ? ({ ...updated, cached_seal_base64: b64 } as any) : updated);
+      } catch (apiErr) {
+        console.warn('API unavailable, caching seal image locally as base64:', apiErr);
+        await new Promise<void>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            try {
+              const b64 = reader.result as string;
+              const current = await offlineStorage.getSettings();
+              const localUpdated = { ...current, seal_image_path: 'local://seal' };
+              await offlineStorage.setSettings(localUpdated, b64);
+              onSettingsUpdated({ ...localUpdated, cached_seal_base64: b64 } as any);
+              resolve();
+            } catch (e) {
+              reject(e);
+            }
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(sealFile);
+        });
+      }
       setSealFile(null);
       setSealPreviewUrl(null);
-      setSuccessMessage('Authorized seal image uploaded and saved persistently in cloud storage & offline cache!');
+      setSuccessMessage('Authorized seal image saved successfully!');
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: any) {
-      setErrorMessage(err?.response?.data?.detail || 'Failed to upload authorized seal image.');
+      setErrorMessage(err?.response?.data?.detail || err?.message || 'Failed to upload authorized seal image.');
     } finally {
       setIsUploadingSeal(false);
     }
@@ -114,15 +135,23 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSettingsUpdated 
     try {
       setIsUploadingSeal(true);
       setErrorMessage(null);
-      const updated = await api.deleteSeal();
-      await offlineStorage.setSettings(updated, null);
-      onSettingsUpdated({ ...updated, cached_seal_base64: null } as any);
+      try {
+        const updated = await api.deleteSeal();
+        await offlineStorage.setSettings(updated, null);
+        onSettingsUpdated({ ...updated, cached_seal_base64: null } as any);
+      } catch (apiErr) {
+        console.warn('API unavailable, removing seal locally:', apiErr);
+        const current = await offlineStorage.getSettings();
+        const localUpdated = { ...current, seal_image_path: null };
+        await offlineStorage.setSettings(localUpdated, null);
+        onSettingsUpdated({ ...localUpdated, cached_seal_base64: null } as any);
+      }
       setSealFile(null);
       setSealPreviewUrl(null);
       setSuccessMessage('Authorized seal removed. Seal area will remain blank on invoices.');
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: any) {
-      setErrorMessage(err?.response?.data?.detail || 'Failed to delete seal.');
+      setErrorMessage(err?.response?.data?.detail || err?.message || 'Failed to delete seal.');
     } finally {
       setIsUploadingSeal(false);
     }
@@ -134,12 +163,24 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onSettingsUpdated 
     try {
       setIsSaving(true);
       setErrorMessage(null);
-      const updated = await api.updateSettings(formData);
+      let updated: ShopSettings;
+      try {
+        updated = await api.updateSettings(formData);
+        await offlineStorage.setSettings(updated);
+      } catch (apiErr) {
+        console.warn('API unavailable, saving settings locally:', apiErr);
+        const current = await offlineStorage.getSettings();
+        updated = {
+          ...current,
+          ...formData,
+        } as ShopSettings;
+        await offlineStorage.setSettings(updated);
+      }
       onSettingsUpdated(updated);
       setSuccessMessage('Shop settings and billing preferences saved successfully!');
       setTimeout(() => setSuccessMessage(null), 4000);
     } catch (err: any) {
-      setErrorMessage(err?.response?.data?.detail || 'Failed to update shop settings.');
+      setErrorMessage(err?.response?.data?.detail || err?.message || 'Failed to update shop settings.');
     } finally {
       setIsSaving(false);
     }
